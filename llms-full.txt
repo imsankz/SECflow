@@ -1,21 +1,41 @@
-# secflow
-Zero-cost security scanning for AI-driven repos — gitleaks + trivy + npm audit + regex, AI-ready fix reports
+# SECflow — full brief for AI coding agents
 
-## Core
-- [README.md](README.md) — overview, install, usage, GitHub Action, config
-- [llms.txt](llms.txt) — LLM-facing brief (agents read this)
-- [LICENSE](LICENSE) — MIT
+SECflow (npm package `secflow`) is a zero-dependency, single-file security scanner for repos written by/with AI coding agents. It unifies gitleaks (secrets), trivy (dep/container CVEs, opt-in), `npm audit`, and custom regex rules into one report with AI-ready fix briefs. MIT licensed. Node >= 18.
 
-## Code
-- [bin/secflow.js](bin/secflow.js) — the entire CLI (single file, zero deps, Node 18+)
-- [action/action.yml](action/action.yml) — composite GitHub Action
-- [examples/security.yml](examples/security.yml) — example consumer workflow
-- [tests/run.js](tests/run.js) — smoke tests (8 tests, plain node asserts)
-- [secflow.yml](secflow.yml) — self-config (excludes tests/ from self-scan)
+## Commands (user-facing)
 
-## CI
-- [.github/workflows/security.yml](.github/workflows/security.yml) — self-scan workflow (test suite + gitleaks gate + full scan)
+```
+secflow scan [--path DIR] [--skip gitleaks,trivy,npm,regex] [--fail-on critical,high] [--json]
+secflow report [--path DIR]        # print last scan's AI-ready brief (.secflow/report.md)
+secflow init [--path DIR]          # write secflow.yml
+secflow install-hook [--path DIR]  # pre-commit hook → gitleaks --staged
+secflow ci [--path DIR] [--skip …] [--fail-on …]   # CI mode, exit 1 when blocked
+```
 
-## Config
-- [.gitleaks.toml](.gitleaks.toml) — allowlist for test fixtures (regex-based only)
-- [.gitignore](.gitignore) — node_modules/, .secflow/, *.log
+Exit codes: 0 = clean, 1 = findings at/above failOn, 2 = internal error.
+
+## Architecture
+
+Everything is `bin/secflow.js`. Flow: parse args → load `secflow.yml` over DEFAULT_CONFIG → run enabled engines (gitleaks, trivy, npm audit, regex walker) → dedupe by engine|file|line|rule → write `.secflow/report.md` + `report.json` → exit per failOn.
+
+- Config parsing is a deliberate YAML subset: flat keys, `engines.*`, `failOn`, `excludePaths` (comma list), `customRegex.<name>: { pattern: '…', severity: … }`.
+- `excludePaths` entries get trailing slashes normalized before comparison (dir-name match).
+- CLI `--fail-on` overrides yml `failOn`; applies to both `scan` and `ci` via `applyCliFailOn()`.
+- Regex engine always re-adds `.git`, `node_modules`, `.secflow` to excludes.
+- Report format (fields: engine, severity, rule, file, line, match, message) is the contract for the AI fix layer — do not change without updating consumers.
+
+## Verification gates (run after any change)
+
+1. `npm test` → 8 passed, 0 failed (plain node asserts; gitleaks test auto-skips if binary missing).
+2. Self-scan: `node bin/secflow.js scan --skip trivy` → 0 findings (repo's own secflow.yml excludes tests/).
+
+## Hard rules
+
+- Test fixtures use deliberately-invalid `REPLACEME` tokens (e.g. `ghp_REPLACEME_…`). NEVER add realistic fake secrets — GitHub push protection blocks the push.
+- `.gitleaks.toml` allowlist stays regex-based (GitHub scans that file too).
+- Zero runtime npm dependencies — Node stdlib only.
+- Version lives in two places: package.json `version` and VERSION constant in bin/secflow.js. Keep in sync.
+
+## Publishing (maintainer)
+
+`npm publish` ships package.json `files`: bin/, action/, examples/, tests/, docs. Binary name is `secflow` (lowercase); display name is SECflow.

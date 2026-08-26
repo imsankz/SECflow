@@ -100,6 +100,37 @@ test('init writes secflow.yml', () => {
   assert.ok(fs.existsSync(path.join(p2, 'secflow.yml')));
 });
 
+// ---------- config: customRegex from secflow.yml + --fail-on override ----------
+const cfgProj = path.join(tmp, 'cfg-test');
+fs.mkdirSync(path.join(cfgProj, 'src'), { recursive: true });
+fs.writeFileSync(path.join(cfgProj, 'secflow.yml'), [
+  'engines:',
+  '  gitleaks: false',
+  '  trivy: false',
+  '  npmAudit: false',
+  '  regex: true',
+  'failOn: critical, high',
+  'customRegex:',
+  "  acme-internal-token: { pattern: 'ACME_[A-Za-z0-9]{20,}', severity: warning }",
+  '',
+].join('\n'));
+fs.writeFileSync(path.join(cfgProj, 'src', 'client.js'), 'const t = "ACME_REPLACEME00000000000000000000";\n');
+
+test('customRegex rules from secflow.yml are parsed, matched, and tolerate default failOn', () => {
+  const r = run(['scan', '--path', cfgProj, '--json']);
+  assert.strictEqual(r.status, 0, `expected exit 0 (warning < default threshold), got ${r.status}`);
+  const out = JSON.parse(r.stdout);
+  const f = out.findings.find(x => x.rule === 'acme-internal-token');
+  assert.ok(f, 'custom rule from secflow.yml not matched');
+  assert.strictEqual(f.severity, 'warning');
+  assert.strictEqual(f.file, 'src/client.js');
+});
+
+test('--fail-on overrides secflow.yml failOn and blocks', () => {
+  const r = run(['scan', '--path', cfgProj, '--fail-on', 'warning']);
+  assert.strictEqual(r.status, 1, 'CLI --fail-on warning should exit 1');
+});
+
 test('install-hook writes executable pre-commit', () => {
   spawnSync('git', ['init', '-q'], { cwd: proj });
   const r = run(['install-hook', '--path', proj]);

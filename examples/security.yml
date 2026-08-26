@@ -1,5 +1,5 @@
 # Example: add to your repo as .github/workflows/security.yml
-name: Security scan (secflow)
+name: Security scan (SECflow)
 on:
   push:
   pull_request:

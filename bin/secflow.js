@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * secflow — zero-cost security scanning for AI-driven repos.
+ * SECflow (npm package: secflow) — zero-cost security scanning for AI-driven repos.
  * Engines: gitleaks (secrets) + trivy (deps) + npm audit + custom regex (env/keys).
  * Output: unified report.md + report.json, severity-tagged, file:line.
  * AI fix layer is external (Hermes/Claude/etc reads report.md).
@@ -19,7 +19,7 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 const DEFAULT_CONFIG = {
   engines: { gitleaks: true, trivy: false, npmAudit: true, regex: true },
@@ -65,11 +65,25 @@ function loadConfig(dir) {
         if (k in cfg.engines) cfg.engines[k] = v === 'true';
         else if (k === 'failOn') cfg.failOn = v.split(',').map(s => s.trim()).filter(Boolean);
         else if (k === 'excludePaths') cfg.excludePaths = v.split(',').map(s => s.trim()).filter(Boolean);
+        else if (v.startsWith('{') && v.includes('pattern')) {
+          // customRegex entry — name: { pattern: '...', severity: critical }
+          const pm = v.match(/pattern:\s*'([^']*)'/);
+          if (pm) {
+            const sm = v.match(/severity:\s*([A-Za-z]+)/);
+            cfg.customRegex[k] = { pattern: pm[1], severity: sm ? sm[1].toLowerCase() : 'warning' };
+          }
+        }
       }
       log(`config: ${p}`);
     } catch (e) { log(`warn: bad secflow.yml (${e.message})`); }
   }
   return cfg;
+}
+
+// CLI --fail-on overrides secflow.yml failOn (honored by scan + ci)
+function applyCliFailOn(args, cfg) {
+  const raw = typeof args['fail-on'] === 'string' ? args['fail-on'] : '';
+  if (raw.trim()) cfg.failOn = raw.split(',').map(s => s.trim()).filter(Boolean);
 }
 
 function engineAvailable(name) {
@@ -290,6 +304,7 @@ async function cmdScan(args) {
   dir = path.resolve(dir);
   const skip = new Set((args.skip || '').split(',').map(s => s.trim()).filter(Boolean));
   const cfg = loadConfig(dir);
+  applyCliFailOn(args, cfg);
   const findings = [];
 
   fs.mkdirSync(path.join(dir, '.secflow'), { recursive: true });
@@ -358,6 +373,7 @@ function cmdCi(args) {
   // CI mode: env vars from GitHub Actions
   const dir = path.resolve(args.path || process.env.GITHUB_WORKSPACE || '.');
   const cfg = loadConfig(dir);
+  applyCliFailOn(args, cfg);
   const findings = [];
   fs.mkdirSync(path.join(dir, '.secflow'), { recursive: true });
   if (!args.skip || !args.skip.includes('gitleaks')) scanGitleaks(dir, cfg, findings).then(() => {

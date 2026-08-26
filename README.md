@@ -138,7 +138,7 @@ jobs:
           fail-on: critical,high   # or: skip: trivy · path: packages/api
 ```
 
-A ready-to-copy version lives at [`examples/security.yml`](examples/security.yml). The composite action definition is [`action/action.yml`](action/action.yml).
+A ready-to-copy version lives at [`examples/security.yml`](examples/security.yml). The composite action definition is [`action.yml`](action.yml).
 
 ## Configuration (`secflow.yml`)
 

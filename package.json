@@ -1,6 +1,6 @@
 {
   "name": "secflow",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "SECflow — zero-cost security scanning for AI-driven repos: secrets (gitleaks), dependency vulns (trivy / npm audit), custom regex rules, and AI-ready fix reports.",
   "license": "MIT",
   "author": "Sankalp Singh",

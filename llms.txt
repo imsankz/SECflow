@@ -12,7 +12,7 @@ Install: `npm i -g secflow` (or `pnpm add -g secflow`, or `npx secflow@latest`).
 
 ## Code
 - [bin/secflow.js](bin/secflow.js) — the entire CLI (single file, zero deps, Node 18+)
-- [action/action.yml](action/action.yml) — composite GitHub Action (`uses: imsankz/secflow@main`)
+- [action.yml](action.yml) — composite GitHub Action (`uses: imsankz/secflow@main`)
 - [examples/security.yml](examples/security.yml) — example consumer workflow
 - [tests/run.js](tests/run.js) — smoke tests (8 tests, plain node asserts, `npm test`)
 - [secflow.yml](secflow.yml) — self-config (excludes tests/ from self-scan)

@@ -175,7 +175,7 @@ async function scanTrivy(dir, cfg, findings) {
 function scanRegex(dir, cfg, findings) {
   if (!cfg.engines.regex) return;
   log('scan: custom regex (env/keys)');
-  const exclude = cfg.excludePaths.concat(['.git', 'node_modules', '.secflow']);
+  const exclude = cfg.excludePaths.map(p => p.replace(/\/+$/, '')).concat(['.git', 'node_modules', '.secflow']);
   const walk = (d) => {
     let entries;
     try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }

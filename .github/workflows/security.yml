@@ -1,4 +1,4 @@
-name: secflow self-scan
+name: SECflow self-scan
 on:
   push:
   pull_request:

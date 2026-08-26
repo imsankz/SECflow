@@ -1,4 +1,4 @@
-name: 'secflow'
+name: 'SECflow'
 description: 'Zero-cost security scan — gitleaks + trivy + npm audit + regex. Uploads .secflow report.'
 inputs:
   fail-on:

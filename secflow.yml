@@ -1,0 +1,8 @@
+# secflow self-config — exclude test fixtures (fake secrets used to verify engines)
+engines:
+  gitleaks: true
+  trivy: false
+  npmAudit: true
+  regex: true
+failOn: critical, high
+excludePaths: node_modules, .git, dist, build, .next, vendor, package-lock.json, tests/

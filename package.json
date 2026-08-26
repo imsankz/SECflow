@@ -1,0 +1,12 @@
+{
+  "name": "secflow",
+  "version": "0.1.0",
+  "description": "Zero-cost security scanning for AI-driven repos — secrets, deps, and custom rules with AI-ready fix reports",
+  "license": "MIT",
+  "bin": { "secflow": "bin/secflow.js" },
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "keywords": ["security", "secrets", "gitleaks", "trivy", "scan", "ci", "ai"]
+}

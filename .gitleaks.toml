@@ -1,0 +1,8 @@
+# Allowlist for secflow's own test fixtures — fake secrets used in tests/run.js
+# NOTE: never put real-looking key material here — GitHub push protection scans this file too.
+[allowlist]
+  description = "secflow test fixtures — fake secrets, never real"
+  regexes = [
+    '''sk_test_[A-Za-z0-9]{24,}''',
+    '''ghp_[A-Za-z0-9]{36}''',
+  ]

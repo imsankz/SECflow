@@ -1,0 +1,23 @@
+name: secflow self-scan
+on:
+  push:
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Test suite
+        run: node tests/run.js
+      - name: Self-scan (gitleaks gate)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Full secflow report
+        run: node bin/secflow.js scan --skip trivy --fail-on critical,high

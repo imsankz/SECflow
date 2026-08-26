@@ -1,0 +1,24 @@
+# Example: add to your repo as .github/workflows/security.yml
+name: Security scan (secflow)
+on:
+  push:
+  pull_request:
+
+jobs:
+  secflow:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Fast native gitleaks gate (zero config, blocks push)
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Full secflow report (gitleaks + npm audit + regex, AI-ready brief)
+      - uses: imsankz/secflow@main
+        with:
+          fail-on: critical,high

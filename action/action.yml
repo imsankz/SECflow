@@ -1,0 +1,50 @@
+name: 'secflow'
+description: 'Zero-cost security scan — gitleaks + trivy + npm audit + regex. Uploads .secflow report.'
+inputs:
+  fail-on:
+    description: 'Comma-separated severities that block the job (critical,high,warning,info)'
+    required: false
+    default: 'critical,high'
+  skip:
+    description: 'Engines to skip (gitleaks,trivy,npm,regex)'
+    required: false
+    default: ''
+  path:
+    description: 'Directory to scan'
+    required: false
+    default: '.'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install gitleaks
+      shell: bash
+      run: |
+        if ! command -v gitleaks >/dev/null 2>&1; then
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(uname -s)_$(uname -m | sed 's/x86_64/x64/').tar.gz | tar -xz -C /usr/local/bin gitleaks
+        fi
+        gitleaks version
+
+    - name: Install trivy (if not skipped)
+      shell: bash
+      if: ${{ !contains(inputs.skip, 'trivy') }}
+      run: |
+        if ! command -v trivy >/dev/null 2>&1; then
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        fi
+        trivy --version
+
+    - name: Run secflow
+      shell: bash
+      run: |
+        cd "${{ inputs.path }}"
+        node "$GITHUB_ACTION_PATH/../bin/secflow.js" scan --fail-on "${{ inputs.fail-on }}" --skip "${{ inputs.skip }}"
+      env:
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+
+    - name: Upload report artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: secflow-report
+        path: .secflow/
+        if-no-files-found: ignore

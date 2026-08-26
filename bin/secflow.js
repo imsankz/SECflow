@@ -19,7 +19,7 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const VERSION = '0.2.2';
+const VERSION = '0.2.3';
 
 const DEFAULT_CONFIG = {
   engines: { gitleaks: true, trivy: false, npmAudit: true, regex: true },

@@ -37,7 +37,7 @@ runs:
       shell: bash
       run: |
         cd "${{ inputs.path }}"
-        node "$GITHUB_ACTION_PATH/../bin/secflow.js" scan --fail-on "${{ inputs.fail-on }}" --skip "${{ inputs.skip }}"
+        node "$GITHUB_ACTION_PATH/bin/secflow.js" scan --fail-on "${{ inputs.fail-on }}" --skip "${{ inputs.skip }}"
       env:
         GITHUB_ACTION_PATH: ${{ github.action_path }}
 

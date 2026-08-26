@@ -19,7 +19,7 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 
 const DEFAULT_CONFIG = {
   engines: { gitleaks: true, trivy: false, npmAudit: true, regex: true },
@@ -190,15 +190,22 @@ function scanRegex(dir, cfg, findings) {
   if (!cfg.engines.regex) return;
   log('scan: custom regex (env/keys)');
   const exclude = cfg.excludePaths.map(p => p.replace(/\/+$/, '')).concat(['.git', 'node_modules', '.secflow']);
+  const rel = (p) => path.relative(dir, p);
+  const isExcluded = (p) => {
+    const r = rel(p);
+    // match full relative path OR any path segment (so `tests/` excludes dir `tests`, and
+    // `skills/seo-google/references` excludes that whole subtree)
+    const segs = r.split(path.sep);
+    return exclude.includes(r) || segs.some(s => exclude.includes(s));
+  };
   const walk = (d) => {
     let entries;
     try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
-      if (exclude.includes(e.name)) continue;
       const p = path.join(d, e.name);
+      if (isExcluded(p)) continue;
       if (e.isDirectory()) { walk(p); continue; }
       if (!e.isFile()) continue;
-      if (p.includes('.secflow')) continue;
       let content;
       try { content = fs.readFileSync(p, 'utf8'); } catch { continue; }
       for (const [name, rule] of Object.entries(cfg.customRegex)) {

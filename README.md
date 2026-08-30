@@ -187,7 +187,7 @@ SECflow is part of a trio of zero-cost CLI tools — all MIT, all npm-published,
 |---|---|---|
 | **SECflow** | Security scanning for AI-driven repos | github.com/imsankz/SECflow |
 | **[SeoFlow](https://github.com/imsankz/seoflow)** | AI-powered SEO pipeline (audit, internal links, content gen, GSC) | github.com/imsankz/seoflow |
-| **[LinkFlow](https://github.com/imsankz/linkflow)** | Backlink & directory submission automation (1,123 directories, Playwright, $0) | github.com/imsankz/linkflow |
+| **[BacklinkFlow](https://github.com/imsankz/backlinkflow)** | Backlink & directory submission automation (1,123 directories, Playwright, $0) | github.com/imsankz/backlinkflow |
 
 ## License
 

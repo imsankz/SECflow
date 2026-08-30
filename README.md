@@ -25,6 +25,7 @@ npm package: [`secflow`](https://www.npmjs.com/package/secflow) · single-file C
 
 ## Why
 
+
 AI coding agents ship code fast — and they also miss leaked secrets, vulnerable dependencies, and auth bugs. Paid scanners (Rafter $39–199, Snyk, Semgrep) wrap these same free engines and charge you extra for the "AI fix" layer. SECflow gives you the engines for free and lets the agent you *already use* be the fix layer.
 
 ```
@@ -178,6 +179,22 @@ Read [`llms.txt`](llms.txt) (short) or [`llms-full.txt`](llms-full.txt) for the 
 - [ ] `--baseline` — ignore previously accepted findings
 - [x] Installable from npm/pnpm as `secflow`
 
+## Related: the *flow* series
+
+SECflow is part of a trio of zero-cost CLI tools — all MIT, all npm-published, all built on the same idea (free engines + your own AI agent as the smart layer):
+
+| Tool | Job | Repo |
+|---|---|---|
+| **SECflow** | Security scanning for AI-driven repos | github.com/imsankz/SECflow |
+| **[SeoFlow](https://github.com/imsankz/seoflow)** | AI-powered SEO pipeline (audit, internal links, content gen, GSC) | github.com/imsankz/seoflow |
+| **[LinkFlow](https://github.com/imsankz/linkflow)** | Backlink & directory submission automation (1,123 directories, Playwright, $0) | github.com/imsankz/linkflow |
+
 ## License
 
 [MIT](LICENSE) — free forever, no credits, no SaaS.
+
+---
+
+## ☕ Support
+
+SECflow is free forever. If it caught a leaked secret or saved you a Snyk bill, [buy me a coffee](https://ko-fi.com/chasingwhereabouts).

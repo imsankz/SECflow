@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!-- Update these meta tags per project -->
+  <meta name="description" content="[PROJECT_TAGLINE]"/>
+  <meta property="og:title" content="[PROJECT_NAME] — [PROJECT_TAGLINE_OG]"/>
+  <meta property="og:description" content="[PROJECT_TAGLINE_OG]"/>
+  <meta property="og:image" content="https://imsankz.github.io/[REPO_NAME]/og-image.png"/>
+  <meta property="og:url" content="https://imsankz.github.io/[REPO_NAME]/"/>
+  <meta property="og:type" content="website"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <title>[PROJECT_NAME] — [SHORT_TAGLINE]</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E[PROJECT_ICON]%3C/text%3E%3C/svg%3E">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
+  <link href="assets/flow-design.css" rel="stylesheet"/>
+  <style>
+    :root {
+      --primary-gradient: linear-gradient(135deg, #38bdf8, #7c3aed, #a855f7);
+    }
+    body { background: #0f172a; }
+    .hero-bg { position: relative; overflow: hidden; }
+    .hero-bg::before {
+      content: ''; position: absolute;
+      top: -50%; left: -50%; width: 200%; height: 200%;
+      background: var(--primary-gradient);
+      opacity: 0.05; filter: blur(100px); z-index: 0;
+    }
+    .hero-content { position: relative; z-index: 1; }
+    .screenshot-frame {
+      border-radius: 20px; overflow: hidden;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.4);
+      border: 1px solid var(--border); margin-top: 40px;
+    }
+    .screenshot-frame img { width: 100%; display: block; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container">
+      <div class="header-inner">
+        <a href="#" class="logo">
+          <span class="logo-icon">[PROJECT_ICON]</span>
+          <span>[PROJECT_NAME]</span>
+        </a>
+        <nav style="display:flex; gap:24px; align-items:center;">
+          <a href="[REPO_URL]#features">Features</a>
+          <a href="[REPO_URL]#usage">Usage</a>
+          <a href="[REPO_URL]#comparison">Comparison</a>
+          <a href="#series">The Flow Series</a>
+          <a href="[REPO_URL]" class="btn btn-small btn-primary" style="margin-left:16px;">GitHub →</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Hero ===== */ -->
+  <section class="hero hero-bg">
+    <div class="container hero-content">
+      <h1>
+        [HERO_LINE_1]
+        <span class="highlight">[HERO_LINE_2]</span>
+        [HERO_LINE_3]
+      </h1>
+      <p>[HERO_SUBTITLE]</p>
+
+      <div class="badges">
+        <span class="badge">[BADGE_1]</span>
+        <span class="badge">[BADGE_2]</span>
+        <span class="badge">MIT License</span>
+        <span class="badge">Free forever</span>
+      </div>
+
+      <div class="cta">
+        <a href="[REPO_URL]#quick-start" class="btn btn-primary">[CTA_PRIMARY]</a>
+        <a href="#comparison" class="btn btn-secondary">[CTA_SECONDARY]</a>
+      </div>
+      <p class="note" style="color: var(--text-dim); font-size: 14px;">
+        [HERO_NOTE]
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== Flow Series Selector ===== */ -->
+  <section class="container" style="margin-top: -40px; margin-bottom: 40px;">
+    <div class="flow-selector">
+      <a href="https://imsankz.github.io/SECflow/" class="flow-pill">🔐 SECflow</a>
+      <a href="https://imsankz.github.io/SEOflow/" class="flow-pill">🌊 SeoFlow</a>
+      <a href="https://imsankz.github.io/backlinkflow/" class="flow-pill">🔗 BacklinkFlow</a>
+    </div>
+  </section>
+
+  <!-- ===== Features ===== */ -->
+  <section id="features" class="section-centered">
+    <div class="container">
+      <h2 class="section-title">Why [PROJECT_NAME]?</h2>
+      <p class="section-subtitle">[WHY_SUBTITLE]</p>
+
+      <div class="features-grid">
+        <!-- Replace with your feature cards -->
+        <div class="feature-card">
+          <div class="icon">🔧</div>
+          <h3>Feature 1</h3>
+          <p>Description of feature 1.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">⚡</div>
+          <h3>Feature 2</h3>
+          <p>Description of feature 2.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Flow Series ===== */ -->
+  <section id="series" style="background: var(--surface);">
+    <div class="container">
+      <h2 class="section-title">The *Flow* Series</h2>
+      <p class="section-subtitle">
+        Three zero-cost CLI tools built on the same idea: free engines + your own AI agent.
+        MIT licensed. No SaaS upsells.
+      </p>
+      <div class="stats-row" style="margin-top: 40px;">
+        <!-- Update with the correct flow pills -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Quick Start ===== */ -->
+  <section id="quick-start" class="container">
+    <div style="max-width: 720px; margin: 0 auto;">
+      <h2 class="section-title">Quick Start</h2>
+      <p class="section-subtitle">[QUICK_START_SUBTITLE]</p>
+      <pre><code>[QUICK_START_CODE]</code></pre>
+      <div style="text-align: center; margin-top: 40px;">
+        <a href="[REPO_URL]" class="btn btn-primary">[CTA_BUTTON] →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Footer ===== */ -->
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <h4>[PROJECT_NAME]</h4>
+          <ul>
+            <li><a href="[REPO_URL]">GitHub</a></li>
+            <li><a href="[NPM_URL]">npm</a></li>
+            <li><a href="[REPO_URL]#quick-start">Quick Start</a></li>
+            <li><a href="[REPO_URL]#commands">Commands</a></li>
+            <li><a href="[REPO_URL]/releases">Releases</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="[REPO_URL]#usage">Documentation</a></li>
+            <li><a href="[REPO_URL]/blob/main/CHANGELOG.md">Changelog</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>The Flow Series</h4>
+          <ul>
+            <li><a href="https://imsankz.github.io/SECflow/">SECflow</a> — Security scanning</li>
+            <li><a href="https://imsankz.github.io/SEOflow/">SeoFlow</a> — SEO pipeline</li>
+            <li><a href="https://imsankz.github.io/backlinkflow/">BacklinkFlow</a> — Backlinks</li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Built by</h4>
+          <ul>
+            <li><a href="https://github.com/imsankz">@imsankz</a></li>
+            <li><div id="kofiwidget2"></div></li>
+            <li><span style="color: var(--text-dim); font-size: 13px;">MIT License</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>[PROJECT_NAME] v[VERSION] · MIT License · [FOOTER_TAGLINE]</p>
+      </div>
+    </div>
+  </footer>
+
+  <script type="text/javascript" src="https://storage.ko-fi.com/cdn/widget/Widget_2.js"></script>
+  <script type="text/javascript">
+    kofiwidget2.init('Buy me a Coffee', '#72a4f2', 'B0B4EDYFG');
+    kofiwidget2.draw();
+  </script>
+</body>
+</html>

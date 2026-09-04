@@ -26,7 +26,7 @@ Everything is `bin/secflow.js`. Flow: parse args → load `secflow.yml` over DEF
 
 ## Verification gates (run after any change)
 
-1. `npm test` → 8 passed, 0 failed (plain node asserts; gitleaks test auto-skips if binary missing).
+1. `npm test` → 19 passed, 0 failed (plain node asserts; gitleaks test auto-skips if binary missing).
 2. Self-scan: `node bin/secflow.js scan --skip trivy` → 0 findings (repo's own secflow.yml excludes tests/).
 
 ## Hard rules
@@ -34,8 +34,8 @@ Everything is `bin/secflow.js`. Flow: parse args → load `secflow.yml` over DEF
 - Test fixtures use deliberately-invalid `REPLACEME` tokens (e.g. `ghp_REPLACEME_…`). NEVER add realistic fake secrets — GitHub push protection blocks the push.
 - `.gitleaks.toml` allowlist stays regex-based (GitHub scans that file too).
 - Zero runtime npm dependencies — Node stdlib only.
-- Version lives in two places: package.json `version` and VERSION constant in bin/secflow.js. Keep in sync.
+- Version lives in package.json only — bin/secflow.js reads it via `require('../package.json').version` at startup.
 
 ## Publishing (maintainer)
 
-`npm publish` ships package.json `files`: bin/, action/, examples/, tests/, docs. Binary name is `secflow` (lowercase); display name is SECflow.
+`npm publish` ships package.json `files`: bin/, examples/, tests/, README.md, LICENSE, secflow.yml, llms.txt, llms-full.txt (plus package.json, always included). Binary name is `secflow` (lowercase); display name is SECflow.

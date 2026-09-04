@@ -20,7 +20,8 @@ runs:
       shell: bash
       run: |
         if ! command -v gitleaks >/dev/null 2>&1; then
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(uname -s)_$(uname -m | sed 's/x86_64/x64/').tar.gz | tar -xz -C /usr/local/bin gitleaks
+          ASSET=$(curl -sSfL https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64 | cut -d'"' -f4)
+          curl -sSfL "$ASSET" | tar -xz -C /usr/local/bin gitleaks
         fi
         gitleaks version
 
@@ -46,5 +47,5 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: secflow-report
-        path: .secflow/
+        path: ${{ inputs.path }}/.secflow/
         if-no-files-found: ignore

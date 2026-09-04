@@ -19,6 +19,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Full secflow report (gitleaks + npm audit + regex, AI-ready brief)
-      - uses: imsankz/secflow@main
+      - uses: imsankz/secflow@v0.3.0   # pin to the latest release tag; see Releases
         with:
           fail-on: critical,high

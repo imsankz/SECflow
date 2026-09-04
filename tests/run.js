@@ -141,5 +141,233 @@ test('install-hook writes executable pre-commit', () => {
   assert.ok(st.mode & 0o100, 'hook not executable');
 });
 
+// ---------- regression: invalid custom pattern (P0-2) ----------
+const badProj = path.join(tmp, 'bad-pattern-test');
+fs.mkdirSync(path.join(badProj, 'src'), { recursive: true });
+fs.writeFileSync(path.join(badProj, 'secflow.yml'), [
+  'engines:',
+  '  gitleaks: false',
+  '  trivy: false',
+  '  npmAudit: false',
+  '  regex: true',
+  'failOn: critical, high',
+  'customRegex:',
+  "  broken-rule: { pattern: '[unclosed', severity: critical }",
+  "  good-rule: { pattern: 'GOOD_[A-Za-z0-9]+', severity: info }",
+  '',
+].join('\n'));
+fs.writeFileSync(path.join(badProj, 'src', 'a.js'), 'const t = "GOOD_REPLACEME_000";\n');
+
+test('invalid custom pattern warns and other rules still run (exit 0)', () => {
+  const r = run(['scan', '--path', badProj, '--json']);
+  assert.strictEqual(r.status, 0, `expected exit 0, got ${r.status}: ${r.stderr.slice(0, 300)}`);
+  assert.ok(/invalid pattern/.test(r.stderr), `stderr missing 'invalid pattern' warning: ${r.stderr.slice(0, 300)}`);
+  const out = JSON.parse(r.stdout);
+  assert.ok(out.findings.find(f => f.rule === 'good-rule'), 'valid rule after invalid one should still match');
+});
+
+// ---------- regression: zero-width custom pattern (P0-1) ----------
+const zeroProj = path.join(tmp, 'zero-width-test');
+fs.mkdirSync(path.join(zeroProj, 'src'), { recursive: true });
+fs.writeFileSync(path.join(zeroProj, 'secflow.yml'), [
+  'engines:',
+  '  gitleaks: false',
+  '  trivy: false',
+  '  npmAudit: false',
+  '  regex: true',
+  'failOn: critical, high',
+  'customRegex:',
+  "  zero-rule: { pattern: '(?:a+)?', severity: info }",
+  '',
+].join('\n'));
+fs.writeFileSync(path.join(zeroProj, 'src', 'a.js'), 'aaa\n');
+
+test('zero-width pattern terminates (no infinite loop)', () => {
+  const r = run(['scan', '--path', zeroProj, '--json'], { timeout: 10000 });
+  assert.notStrictEqual(r.status, null, 'scan was killed — zero-width pattern hung');
+  assert.ok(r.error === undefined || r.error.code !== 'ETIMEDOUT', 'scan timed out on zero-width pattern');
+  assert.strictEqual(r.status, 0, `expected exit 0, got ${r.status}`);
+});
+
+// ---------- regression: ci runs full pipeline when gitleaks skipped (P0-3) ----------
+const ciProj = path.join(tmp, 'ci-test');
+fs.mkdirSync(path.join(ciProj, 'src'), { recursive: true });
+fs.writeFileSync(path.join(ciProj, 'src', 'auth.js'), 'const token = "ghp_REPLACEME_1234567890abcdefghijklmnopqrstuvwxyzABCDEFGH";\n');
+
+test('ci --skip gitleaks,trivy,npm still scans regex and blocks', () => {
+  const r = run(['ci', '--path', ciProj, '--skip', 'gitleaks,trivy,npm']);
+  assert.strictEqual(r.status, 1, `expected exit 1, got ${r.status}: ${r.stderr.slice(0, 300)}`);
+  assert.ok(r.stdout.startsWith('secflow ci:'), `ci summary line missing: ${r.stdout.slice(0, 200)}`);
+  assert.ok(r.stdout.includes('BLOCKED'), 'ci should report BLOCKED');
+  assert.ok(fs.existsSync(path.join(ciProj, '.secflow', 'report.md')), 'report.md should exist');
+});
+
+// ---------- regression: bare --skip flag (P0-4) ----------
+test('bare --skip does not crash', () => {
+  const r = run(['scan', '--path', cfgProj, '--skip']);
+  assert.ok(r.status === 0 || r.status === 1, `expected exit 0/1, got ${r.status}`);
+  assert.ok(!r.stderr.includes('TypeError'), `TypeError leaked: ${r.stderr.slice(0, 300)}`);
+});
+
+// ---------- regression: --version (P2-12) ----------
+test('--version prints secflow v', () => {
+  const r = run(['--version']);
+  assert.strictEqual(r.status, 0);
+  assert.match(r.stdout, /^secflow v\d+\.\d+\.\d+/);
+});
+
+// ---------- regression: --json must still block (exit 1) ----------
+test('scan --json exits 1 when blocked and stdout stays valid JSON', () => {
+  const r = run(['scan', '--path', proj, '--skip', 'gitleaks,trivy,npm', '--json']);
+  assert.strictEqual(r.status, 1, `expected exit 1 with blocked findings, got ${r.status}`);
+  const out = JSON.parse(r.stdout);
+  assert.ok(out.findings.length > 0, 'expected findings in JSON');
+});
+
+// ---------- regression: inline comments / quoted scalars in secflow.yml ----------
+const commentProj = path.join(tmp, 'comment-config-test');
+fs.mkdirSync(path.join(commentProj, 'src'), { recursive: true });
+fs.writeFileSync(path.join(commentProj, 'secflow.yml'), [
+  'engines:',
+  '  gitleaks: false   # skip engine',
+  '  trivy: false      # skip engine',
+  '  npmAudit: false   # skip engine',
+  '  regex: true       # keep this on',
+  'failOn: "critical, high"  # quoted scalar',
+  'customRegex:',
+  "  commented-rule: { pattern: 'COMMENTED_[A-Za-z0-9]+', severity: warning } # note",
+  '',
+].join('\n'));
+fs.writeFileSync(path.join(commentProj, 'src', 'a.js'), 'const t = "COMMENTED_REPLACEME_000";\n');
+
+test('trailing inline comments do not disable engines or break quoted scalars', () => {
+  const r = run(['scan', '--path', commentProj, '--json']);
+  assert.strictEqual(r.status, 0, `expected exit 0, got ${r.status}: ${r.stderr.slice(0, 300)}`);
+  const out = JSON.parse(r.stdout);
+  const f = out.findings.find(x => x.rule === 'commented-rule');
+  assert.ok(f, 'custom rule with trailing comment should still match (regex engine stayed on)');
+});
+
+// ---------- regression: install-hook backs up foreign hook ----------
+test('install-hook backs up a foreign pre-commit, idempotent on its own', () => {
+  const p3 = path.join(tmp, 'hook-test');
+  fs.mkdirSync(path.join(p3, '.git', 'hooks'), { recursive: true });
+  const hook = path.join(p3, '.git', 'hooks', 'pre-commit');
+  fs.writeFileSync(hook, '#!/bin/sh\nexit 0 # not secflow\n');
+  let r = run(['install-hook', '--path', p3]);
+  assert.strictEqual(r.status, 0);
+  assert.ok(fs.existsSync(hook + '.secflow-bak'), 'foreign hook should be backed up');
+  assert.ok(fs.readFileSync(hook, 'utf8').includes('secflow pre-commit'), 'hook should be replaced by secflow hook');
+  r = run(['install-hook', '--path', p3]); // re-run on secflow's own hook: idempotent, no second backup churn
+  assert.strictEqual(r.status, 0);
+  assert.ok(fs.readFileSync(hook, 'utf8').includes('secflow pre-commit'));
+});
+
+// ---------- regression: report before any scan exits 2 (documented contract) ----------
+test('report with no prior scan exits 2', () => {
+  const p4 = path.join(tmp, 'no-report-test');
+  fs.mkdirSync(p4, { recursive: true });
+  const r = run(['report', '--path', p4]);
+  assert.strictEqual(r.status, 2);
+});
+
+// ---------- supabase-key rule: HS256 header form ----------
+test('supabase-key matches HS256-header anon key', () => {
+  const p5 = path.join(tmp, 'supabase-test');
+  fs.mkdirSync(path.join(p5, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(p5, 'src', 'client.js'),
+    'const key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.REPLACEMEREPLACEMEREPLACEME.REPLACEMEREPLACEME";\n');
+  const r = run(['scan', '--path', p5, '--skip', 'gitleaks,trivy,npm', '--json']);
+  const out = JSON.parse(r.stdout);
+  const sb = out.findings.find(f => f.rule === 'supabase-key');
+  assert.ok(sb, 'HS256-header supabase key should match supabase-key rule');
+  assert.strictEqual(sb.severity, 'high');
+  assert.strictEqual(sb.file, 'src/client.js');
+  assert.strictEqual(sb.line, 1);
+});
+
+// ---------- verify: re-attack comparison ----------
+test('verify: no prior report exits 2', () => {
+  const p6 = path.join(tmp, 'verify-noreport');
+  fs.mkdirSync(p6, { recursive: true });
+  const r = run(['verify', '--path', p6]);
+  assert.strictEqual(r.status, 2);
+});
+
+test('verify: detects new regressions and fixed findings', () => {
+  const p7 = path.join(tmp, 'verify-regression');
+  fs.mkdirSync(path.join(p7, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(p7, 'package.json'), JSON.stringify({ name: 'v', version: '1.0.0', dependencies: {} }));
+  // First scan: has a secret (TEST-only format, matches sk_live_[A-Za-z0-9_]{24,})
+  fs.writeFileSync(path.join(p7, 'src', 'config.js'), 'const key = "sk_live_TEST_0000000000000000000000000000";\n');
+  let r = run(['scan', '--path', p7, '--skip', 'gitleaks,trivy,npm']);
+  assert.strictEqual(r.status, 1);
+  // Second scan: same secret + new one
+  fs.writeFileSync(path.join(p7, 'src', 'config.js'), 'const key = "sk_live_TEST_0000000000000000000000000000";\n');
+  fs.writeFileSync(path.join(p7, 'src', 'new.js'), 'const token = "ghp_TEST_000000000000000000000000000000000000";\n');
+  r = run(['scan', '--path', p7, '--skip', 'gitleaks,trivy,npm']);
+  assert.strictEqual(r.status, 1);
+  // Verify: should detect 1 new regression
+  r = run(['verify', '--path', p7, '--skip', 'gitleaks,trivy,npm']);
+  assert.strictEqual(r.status, 1);
+  const verifyReport = JSON.parse(fs.readFileSync(path.join(p7, '.secflow', 'verify.json'), 'utf8'));
+  assert.strictEqual(verifyReport.summary.new_regressions, 1);
+  assert.strictEqual(verifyReport.summary.still_present, 1);
+  assert.ok(verifyReport.new_regressions, 'verify.json should have new_regressions array');
+  assert.ok(fs.existsSync(path.join(p7, '.secflow', 'verify.md')), 'verify.md should be written');
+});
+
+test('verify: reports fixed findings', () => {
+  const p8 = path.join(tmp, 'verify-fixed');
+  fs.mkdirSync(path.join(p8, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(p8, 'package.json'), JSON.stringify({ name: 'v', version: '1.0.0', dependencies: {} }));
+  // First scan: has secrets
+  fs.writeFileSync(path.join(p8, 'src', 'a.js'), 'const key = "sk_live_TEST_0000000000000000000000000000";\n');
+  fs.writeFileSync(path.join(p8, 'src', 'b.js'), 'const token = "ghp_TEST_000000000000000000000000000000000000";\n');
+  let r = run(['scan', '--path', p8, '--skip', 'gitleaks,trivy,npm']);
+  assert.strictEqual(r.status, 1);
+  // Fix: remove secrets
+  fs.writeFileSync(path.join(p8, 'src', 'a.js'), 'const key = process.env.KEY;\n');
+  fs.writeFileSync(path.join(p8, 'src', 'b.js'), 'const token = process.env.TOKEN;\n');
+  r = run(['scan', '--path', p8, '--skip', 'gitleaks,trivy,npm']);
+  assert.strictEqual(r.status, 0);
+  // Verify: should report fixed findings
+  r = run(['verify', '--path', p8, '--skip', 'gitleaks,trivy,npm']);
+  assert.strictEqual(r.status, 0);
+  const verifyReport = JSON.parse(fs.readFileSync(path.join(p8, '.secflow', 'verify.json'), 'utf8'));
+  assert.strictEqual(verifyReport.summary.new_regressions, 0);
+  assert.strictEqual(verifyReport.summary.fixed, 2);
+});
+
+// ---------- baseline: snapshot accepted findings ----------
+test('baseline: no prior report exits 2', () => {
+  const p9 = path.join(tmp, 'baseline-noreport');
+  fs.mkdirSync(p9, { recursive: true });
+  const r = run(['baseline', '--path', p9]);
+  assert.strictEqual(r.status, 2);
+});
+
+test('baseline: saves snapshot and scan --baseline subtracts it', () => {
+  const p10 = path.join(tmp, 'baseline-subtract');
+  fs.mkdirSync(path.join(p10, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(p10, 'package.json'), JSON.stringify({ name: 'b', version: '1.0.0', dependencies: {} }));
+  fs.writeFileSync(path.join(p10, 'src', 'config.js'), 'const key = "sk_live_TEST_0000000000000000000000000000";\n');
+  let r = run(['scan', '--path', p10, '--skip', 'gitleaks,trivy,npm']);
+  assert.strictEqual(r.status, 1);
+  // Save baseline
+  r = run(['baseline', '--path', p10]);
+  assert.strictEqual(r.status, 0);
+  const baseline = JSON.parse(fs.readFileSync(path.join(p10, '.secflow', 'baseline.json'), 'utf8'));
+  assert.strictEqual(baseline.total_accepted, 1);
+  assert.ok(baseline.commit, 'baseline should have commit info');
+  // Scan with --baseline: should show 0 new findings
+  r = run(['scan', '--path', p10, '--skip', 'gitleaks,trivy,npm', '--baseline']);
+  assert.strictEqual(r.status, 0);
+  // Clear baseline
+  r = run(['baseline', '--path', p10, '--clear']);
+  assert.strictEqual(r.status, 0);
+  assert.ok(!fs.existsSync(path.join(p10, '.secflow', 'baseline.json')), 'baseline file should be removed');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

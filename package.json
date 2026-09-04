@@ -1,14 +1,15 @@
 {
   "name": "secflow",
-  "version": "0.2.3",
-  "description": "SECflow — zero-cost security scanning for AI-driven repos: secrets (gitleaks), dependency vulns (trivy / npm audit), custom regex rules, and AI-ready fix reports.",
+  "version": "0.4.0",
+  "description": "SECflow — zero-cost security scanning for AI-driven repos: secrets (gitleaks), dependency vulns (trivy / npm audit), custom regex rules, AI-ready fix reports, re-attack verification, and baseline snapshots.",
   "license": "MIT",
   "author": "Sankalp Singh",
-  "bin": { "secflow": "bin/secflow.js" },
+  "bin": {
+    "secflow": "bin/secflow.js"
+  },
   "main": "bin/secflow.js",
   "files": [
     "bin/",
-    "action/",
     "examples/",
     "tests/",
     "README.md",
@@ -17,7 +18,9 @@
     "llms.txt",
     "llms-full.txt"
   ],
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "preferGlobal": true,
   "scripts": {
     "test": "node tests/run.js",
@@ -43,6 +46,8 @@
     "type": "git",
     "url": "https://github.com/imsankz/secflow.git"
   },
-  "bugs": { "url": "https://github.com/imsankz/secflow/issues" },
+  "bugs": {
+    "url": "https://github.com/imsankz/secflow/issues"
+  },
   "homepage": "https://github.com/imsankz/secflow"
 }

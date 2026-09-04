@@ -28,9 +28,18 @@ npm package: [`secflow`](https://www.npmjs.com/package/secflow) · single-file C
 
 AI coding agents ship code fast — and they also miss leaked secrets, vulnerable dependencies, and auth bugs. Paid scanners (Rafter $39–199, Snyk, Semgrep) wrap these same free engines and charge you extra for the "AI fix" layer. SECflow gives you the engines for free and lets the agent you *already use* be the fix layer.
 
+## How it works
+
 ```
-secflow scan  →  .secflow/report.md  →  paste brief into your agent  →  fixes
-     free engines        human + AI readable              no SaaS, no credits
+secflow scan          →  .secflow/report.md  →  paste brief into your agent  →  fixes
+     free engines           human + AI readable              no SaaS, no credits
+
+# After fixing, verify nothing regressed:
+secflow verify        →  re-runs scan, compares to previous, reports NEW regressions + fixed
+
+# Accept known-good findings so future scans only flag NEW issues:
+secflow baseline      →  snapshot current findings as accepted
+secflow scan --baseline  →  subtract accepted findings from results
 ```
 
 ## Install
@@ -88,13 +97,17 @@ secflow scan                  # scan current dir → .secflow/report.md + report
 secflow scan --json           # machine-readable summary on stdout
 secflow scan --skip trivy     # skip engines you don't have (gitleaks,trivy,npm,regex)
 secflow scan --fail-on high   # override which severities exit non-zero
+secflow scan --baseline       # subtract accepted findings (from `secflow baseline`)
 secflow report                # print the AI-ready brief from the last scan
+secflow verify                # re-attack: re-run scan, compare to previous, report regressions
+secflow baseline              # snapshot current findings as accepted/known-good
+secflow baseline --clear      # wipe baseline, start fresh
 secflow init                  # write a secflow.yml config to the current repo
 secflow install-hook          # pre-commit hook: gitleaks on staged files
 secflow ci                    # CI mode — exits 1 when fail-on severities are present
 ```
 
-Exit codes: `0` clean · `1` findings at/above threshold (`critical,high` by default) · `2` internal error.
+Exit codes: `0` clean · `1` findings at/above threshold (`critical,high` by default) · `2` command/internal error (e.g. `secflow report` before any scan).
 
 ### Example report (`.secflow/report.md`)
 
@@ -107,7 +120,7 @@ Exit codes: `0` clean · `1` findings at/above threshold (`critical,high` by def
 ### AI-ready fixes
 **stripe-live-secret** — src/config.js:1
 - custom rule 'stripe-live-secret' matched
-- `secflow fix src/config.js:1`
+- Prompt for your agent: "Fix the SECflow finding 'stripe-live-secret' at src/config.js:1 — custom rule 'stripe-live-secret' matched. Redact and rotate the secret, then re-run secflow scan."
 ```
 
 Paste that section into your coding agent with *"fix all of these"* — every entry carries engine, rule id, exact location, and severity.
@@ -134,7 +147,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Full SECflow report → uploads .secflow/ artifact, fails on critical/high
-      - uses: imsankz/secflow@main
+      - uses: imsankz/secflow@v0.3.0   # pin to the latest release tag; see Releases
         with:
           fail-on: critical,high   # or: skip: trivy · path: packages/api
 ```
@@ -161,7 +174,7 @@ Notes:
 
 - `excludePaths` entries are slash-tolerant (`tests/` matches dir `tests`) and always implicitly include `.git`, `node_modules`, `.secflow`.
 - `--fail-on critical` on the CLI overrides `failOn:` from the file.
-- Matches are always redacted to the first 8 characters in reports.
+- Matches are always redacted: regex-engine matches show the first 8 characters; gitleaks matches are fully replaced with `REDACTED` by the engine itself before secflow ever sees them.
 
 ## For AI coding agents working in this repo
 
@@ -169,8 +182,10 @@ Read [`llms.txt`](llms.txt) (short) or [`llms-full.txt`](llms-full.txt) for the 
 
 - **Single-file CLI, zero npm deps** — everything lives in [`bin/secflow.js`](bin/secflow.js), Node 18+ stdlib only.
 - **Test fixtures use deliberately-invalid `REPLACEME` tokens** so GitHub push protection passes. Never commit real-looking fake secrets.
-- After changes: `npm test` must pass **8/8**, and self-scan must be clean: `node bin/secflow.js scan --skip trivy`.
+- After changes: `npm test` must pass **25/25**, and self-scan must be clean: `node bin/secflow.js scan --skip trivy`.
 - The report format is the contract for the AI fix layer — don't change fields without updating consumers.
+- `secflow verify` re-runs the scan pipeline and compares against the previous report — use it to confirm fixes landed and catch regressions.
+- `secflow baseline` snapshots accepted findings into `.secflow/baseline.json`; `secflow scan --baseline` subtracts them from results.
 
 ## Roadmap
 

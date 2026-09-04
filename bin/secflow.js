@@ -8,9 +8,12 @@
  * Usage:
  *   secflow scan [--path DIR] [--skip <engines>] [--fail-on critical,high] [--json]
  *   secflow report [--path DIR]           # read last scan, print AI-ready brief
+ *   secflow verify [--path DIR] [--all]   # re-attack: confirm fixes landed
+ *   secflow baseline [--path DIR] [--accept-all] [--clear]  # snapshot accepted findings
  *   secflow install-hook [--path DIR]     # pre-commit hook → gitleaks only
  *   secflow init [--path DIR]             # add secflow.yml config
  *   secflow ci                            # CI mode: scan, fail on block, upload
+ *   secflow --version                     # print version
  */
 
 'use strict';
@@ -19,11 +22,12 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const VERSION = '0.2.3';
+const VERSION = (() => {
+  try { return require('../package.json').version; } catch { return '0.0.0'; }
+})();
 
 const DEFAULT_CONFIG = {
   engines: { gitleaks: true, trivy: false, npmAudit: true, regex: true },
-  severity: ['error', 'warning', 'info'],
   failOn: ['critical', 'high'], // CI blocks on these
   excludePaths: ['node_modules', '.git', 'dist', 'build', '.next', 'vendor', 'package-lock.json'],
   customRegex: {
@@ -37,7 +41,7 @@ const DEFAULT_CONFIG = {
     'jwt': { pattern: 'eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}', severity: 'warning' },
     'private-key-block': { pattern: '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----', severity: 'critical' },
     'slack-token': { pattern: 'xox[baprs]-[0-9A-Za-z-]{10,}', severity: 'critical' },
-    'supabase-key': { pattern: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{20,}', severity: 'high' },
+    'supabase-key': { pattern: '(?:eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9|eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9)\\.[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{10,}', severity: 'high' },
   },
 };
 
@@ -61,7 +65,14 @@ function loadConfig(dir) {
       for (const line of lines) {
         const m = line.match(/^\s*([A-Za-z0-9_-]+):\s*(.*)$/);
         if (!m) continue;
-        const [k, v] = [m[1], m[2].trim()];
+        const k = m[1];
+        let v = m[2].trim();
+        if (!v.startsWith('{')) {
+          // strip trailing inline comments; unwrap surrounding quotes (a quoted scalar
+          // may still carry a comment after the closing quote)
+          const q = v.match(/^("([^"]*)"|'([^']*)')(?:\s+#.*)?$/);
+          v = q ? (q[2] !== undefined ? q[2] : q[3]) : v.replace(/\s+#.*$/, '').trim();
+        }
         if (k in cfg.engines) cfg.engines[k] = v === 'true';
         else if (k === 'failOn') cfg.failOn = v.split(',').map(s => s.trim()).filter(Boolean);
         else if (k === 'excludePaths') cfg.excludePaths = v.split(',').map(s => s.trim()).filter(Boolean);
@@ -86,19 +97,21 @@ function applyCliFailOn(args, cfg) {
   if (raw.trim()) cfg.failOn = raw.split(',').map(s => s.trim()).filter(Boolean);
 }
 
+// CLI --skip parses to a Set; a bare --skip (no value) normalizes to "skip nothing"
+function parseSkip(args) {
+  const skipRaw = typeof args.skip === 'string' ? args.skip : '';
+  return new Set(skipRaw.split(',').map(s => s.trim()).filter(Boolean));
+}
+
 function engineAvailable(name) {
-  try { execFileSync('which', [name], { stdio: 'ignore' }); return true; }
+  // probe the binary directly — `which` is absent on Windows shells
+  try { execFileSync(name, ['--version'], { stdio: 'ignore', timeout: 60000 }); return true; }
   catch { return false; }
 }
 
 function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opts });
+  const r = spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 600000, ...opts });
   return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
-}
-
-function severityRank(s) {
-  const order = { info: 0, warning: 1, high: 2, critical: 3, error: 2 };
-  return order[s] ?? 1;
 }
 
 // ---------- engines ----------
@@ -107,20 +120,22 @@ async function scanGitleaks(dir, cfg, findings) {
   if (!cfg.engines.gitleaks) return;
   if (!engineAvailable('gitleaks')) { log('warn: gitleaks not installed — skipping'); return; }
   log('scan: gitleaks (secrets)');
-  const r = run('gitleaks', ['detect', '--source', dir, '--no-banner', '--redact', '=40', '--report-format', 'json', '--report-path', path.join(dir, '.secflow', 'gitleaks.json')]);
-  if (r.status !== 0 && r.status !== 1) log(`warn: gitleaks exit ${r.status}: ${r.stderr.slice(0, 300)}`);
+  const relFile = (p) => (p && path.isAbsolute(p) ? path.relative(dir, p) : p || '');
   const reportPath = path.join(dir, '.secflow', 'gitleaks.json');
+  const r = run('gitleaks', ['detect', '--source', dir, '--no-banner', '--redact=100', '--report-format', 'json', '--report-path', reportPath]);
+  if (r.status !== 0 && r.status !== 1) log(`warn: gitleaks exit ${r.status}: ${r.stderr.slice(0, 300)}`);
   if (!fs.existsSync(reportPath)) return;
   let data;
-  try { data = JSON.parse(fs.readFileSync(reportPath, 'utf8')); } catch { return; }
+  try { data = JSON.parse(fs.readFileSync(reportPath, 'utf8')); } catch { data = null; }
+  fs.rmSync(reportPath, { force: true }); // never leave gitleaks' report on disk
   if (!Array.isArray(data)) return;
   for (const f of data) {
     findings.push({
       engine: 'gitleaks',
       severity: (f.RuleID || '').toLowerCase().includes('test') ? 'high' : 'critical',
       rule: f.RuleID || 'secret',
-      file: f.File,
-      line: f.StartLine || f.line,
+      file: relFile(f.File),
+      line: f.StartLine || 0,
       match: (f.Secret || '').slice(0, 8) + '…(redacted)',
       message: f.Description || f.RuleID || 'secret found',
     });
@@ -154,6 +169,7 @@ async function scanTrivy(dir, cfg, findings) {
   if (!cfg.engines.trivy) return;
   if (!engineAvailable('trivy')) { log('warn: trivy not installed — skipping'); return; }
   log('scan: trivy (dependencies/containers)');
+  const relFile = (p) => (p && path.isAbsolute(p) ? path.relative(dir, p) : p || '');
   const r = run('trivy', ['fs', '--scanners', 'vuln,secret', '--format', 'json', '--quiet', dir], { cwd: dir, timeout: 300000 });
   if (r.status !== 0) { log(`warn: trivy exit ${r.status}`); return; }
   let data;
@@ -166,7 +182,7 @@ async function scanTrivy(dir, cfg, findings) {
         engine: 'trivy',
         severity: sev === 'critical' ? 'critical' : sev === 'high' ? 'high' : 'warning',
         rule: v.VulnerabilityID || 'cve',
-        file: res.Target || '',
+        file: relFile(res.Target),
         line: 0,
         match: v.PkgName || '',
         message: `${v.VulnerabilityID} ${v.PkgName}@${v.InstalledVersion} → fix ${v.FixedVersion || 'n/a'}`,
@@ -177,7 +193,7 @@ async function scanTrivy(dir, cfg, findings) {
         engine: 'trivy-secret',
         severity: 'critical',
         rule: s.RuleID || 'secret',
-        file: res.Target || '',
+        file: relFile(res.Target),
         line: s.StartLine || 0,
         match: (s.Match || '').slice(0, 8) + '…(redacted)',
         message: s.Title || 'secret found',
@@ -185,6 +201,8 @@ async function scanTrivy(dir, cfg, findings) {
     }
   }
 }
+
+const MAX_SCAN_FILE_BYTES = 2 * 1024 * 1024;
 
 function scanRegex(dir, cfg, findings) {
   if (!cfg.engines.regex) return;
@@ -198,6 +216,11 @@ function scanRegex(dir, cfg, findings) {
     const segs = r.split(path.sep);
     return exclude.includes(r) || segs.some(s => exclude.includes(s));
   };
+  const compiled = [];
+  for (const [name, rule] of Object.entries(cfg.customRegex)) {
+    try { compiled.push({ name, severity: rule.severity, re: new RegExp(rule.pattern, 'g') }); }
+    catch { log(`warn: rule '${name}' has invalid pattern — skipped`); }
+  }
   const walk = (d) => {
     let entries;
     try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
@@ -206,10 +229,15 @@ function scanRegex(dir, cfg, findings) {
       if (isExcluded(p)) continue;
       if (e.isDirectory()) { walk(p); continue; }
       if (!e.isFile()) continue;
-      let content;
-      try { content = fs.readFileSync(p, 'utf8'); } catch { continue; }
-      for (const [name, rule] of Object.entries(cfg.customRegex)) {
-        const re = new RegExp(rule.pattern, 'g');
+      let size;
+      try { size = fs.statSync(p).size; } catch { continue; }
+      if (size > MAX_SCAN_FILE_BYTES) continue;
+      let buf;
+      try { buf = fs.readFileSync(p); } catch { continue; }
+      if (buf.subarray(0, 8192).includes(0)) continue; // binary: NUL byte in first 8 KB
+      const content = buf.toString('utf8');
+      for (const { name, severity, re } of compiled) {
+        re.lastIndex = 0;
         let m;
         while ((m = re.exec(content)) !== null) {
           // compute line number
@@ -217,13 +245,14 @@ function scanRegex(dir, cfg, findings) {
           const line = before.split('\n').length;
           findings.push({
             engine: 'regex',
-            severity: rule.severity,
+            severity,
             rule: name,
-            file: p.replace(dir + '/', ''),
+            file: path.relative(dir, p),
             line,
             match: m[0].slice(0, 8) + '…(redacted)',
             message: `custom rule '${name}' matched`,
           });
+          if (m[0].length === 0) re.lastIndex++; // zero-length match: advance or we loop forever
         }
       }
     }
@@ -242,6 +271,8 @@ function dedupe(findings) {
     return true;
   });
 }
+
+const cell = (s) => String(s).replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
 
 function generateReport(findings, cfg, dir) {
   const out = path.join(dir, '.secflow');
@@ -284,15 +315,15 @@ function generateReport(findings, cfg, dir) {
     lines.push('| # | Engine | Rule | File:Line | Match |');
     lines.push('|---|--------|------|-----------|-------|');
     items.forEach((f, i) => {
-      lines.push(`| ${i + 1} | ${f.engine} | \`${f.rule}\` | \`${f.file}:${f.line}\` | \`${f.match}\` |`);
+      lines.push(`| ${i + 1} | ${cell(f.engine)} | \`${cell(f.rule)}\` | \`${cell(f.file)}:${f.line}\` | \`${cell(f.match)}\` |`);
     });
     lines.push('');
     lines.push('### AI-ready fixes');
     lines.push('');
     for (const f of items) {
-      lines.push(`**${f.rule}** — ${f.file}:${f.line}`);
-      lines.push(`- ${f.message}`);
-      lines.push(`- \`secflow fix ${f.file}:${f.line}\``);
+      lines.push(`**${cell(f.rule)}** — ${cell(f.file)}:${f.line}`);
+      lines.push(`- ${cell(f.message)}`);
+      lines.push(`- Prompt for your agent: "Fix the SECflow finding '${cell(f.rule)}' at ${cell(f.file)}:${f.line} — ${cell(f.message)}. Redact and rotate the secret, then re-run secflow scan."`);
       lines.push('');
     }
     lines.push('');
@@ -306,39 +337,82 @@ function generateReport(findings, cfg, dir) {
 
 // ---------- commands ----------
 
-async function cmdScan(args) {
-  let dir = args.path || '.';
-  dir = path.resolve(dir);
-  const skip = new Set((args.skip || '').split(',').map(s => s.trim()).filter(Boolean));
-  const cfg = loadConfig(dir);
-  applyCliFailOn(args, cfg);
-  const findings = [];
-
+// shared engine pipeline used by both cmdScan and cmdCi; mkdirs .secflow first
+async function runEngines(dir, cfg, skip, findings) {
   fs.mkdirSync(path.join(dir, '.secflow'), { recursive: true });
-
   if (!skip.has('gitleaks')) await scanGitleaks(dir, cfg, findings);
   if (!skip.has('trivy')) await scanTrivy(dir, cfg, findings);
   if (!skip.has('npm')) await scanNpmAudit(dir, cfg, findings);
   if (!skip.has('regex')) scanRegex(dir, cfg, findings);
+}
+
+async function cmdScan(args) {
+  let dir = args.path || '.';
+  dir = path.resolve(dir);
+  const skip = parseSkip(args);
+  const cfg = loadConfig(dir);
+  applyCliFailOn(args, cfg);
+  const findings = [];
+
+  // Archive previous report before running new scan (so verify can compare)
+  const reportDir = path.join(dir, '.secflow');
+  const reportPath = path.join(reportDir, 'report.json');
+  const prevPath = path.join(reportDir, 'report-prev.json');
+  if (fs.existsSync(reportPath)) {
+    try {
+      fs.copyFileSync(reportPath, prevPath);
+    } catch { /* ignore */ }
+  }
+
+  await runEngines(dir, cfg, skip, findings);
 
   const deduped = dedupe(findings);
-  const { counts, blocked } = generateReport(deduped, cfg, dir);
 
+  // If --baseline flag, subtract accepted findings from results
+  let baseline = null;
+  let newFindings = deduped;
+  if (args.baseline) {
+    const bl = loadBaseline(dir);
+    baseline = bl.baseline;
+    newFindings = deduped.filter(f => !bl.baselineKeys.has(`${f.engine}|${f.file}|${f.line}|${f.rule}`));
+    if (baseline) {
+      log(`baseline: subtracting ${baseline.total_accepted || 0} accepted findings`);
+    }
+  }
+
+  const { counts, blocked } = generateReport(newFindings, cfg, dir);
+
+  if (blocked.length) process.exitCode = 1;
   if (args.json) {
-    console.log(JSON.stringify({ version: VERSION, counts, blocked, findings: deduped }, null, 2));
+    console.log(JSON.stringify({ version: VERSION, counts, blocked, findings: newFindings }, null, 2));
     return;
   }
-  console.log(`secflow scan complete: ${deduped.length} findings (critical ${counts.critical}, high ${counts.high}, warning ${counts.warning}, info ${counts.info})`);
-  if (blocked.length) {
-    console.error(`FAIL: ${blocked.join(', ')} severity present — see .secflow/report.md`);
-    process.exitCode = 1;
+  if (baseline) {
+    console.log(`secflow scan complete: ${newFindings.length} new findings (${deduped.length} total, ${deduped.length - newFindings.length} accepted via baseline)`);
+  } else {
+    console.log(`secflow scan complete: ${deduped.length} findings (critical ${counts.critical}, high ${counts.high}, warning ${counts.warning}, info ${counts.info})`);
+  }
+  if (blocked.length) console.error(`FAIL: ${blocked.join(', ')} severity present — see .secflow/report.md`);
+}
+
+// Load baseline findings (if any) to subtract from scan results.
+// Returns { baseline: object|null, baselineKeys: Set }
+function loadBaseline(dir) {
+  const baselinePath = path.join(dir, '.secflow', 'baseline.json');
+  if (!fs.existsSync(baselinePath)) return { baseline: null, baselineKeys: new Set() };
+  try {
+    const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+    const baselineKeys = new Set((baseline.accepted || []).map(f => `${f.engine}|${f.file}|${f.line}|${f.rule}`));
+    return { baseline, baselineKeys };
+  } catch {
+    return { baseline: null, baselineKeys: new Set() };
   }
 }
 
 function cmdReport(args) {
   const dir = path.resolve(args.path || '.');
   const p = path.join(dir, '.secflow', 'report.md');
-  if (!fs.existsSync(p)) { console.error('no report — run `secflow scan` first'); process.exit(1); }
+  if (!fs.existsSync(p)) { console.error('no report — run `secflow scan` first'); process.exit(2); }
   console.log(fs.readFileSync(p, 'utf8'));
 }
 
@@ -363,6 +437,12 @@ function cmdInstallHook(args) {
   const hooksDir = path.join(dir, '.git', 'hooks');
   if (!fs.existsSync(hooksDir)) { console.error(`not a git repo: ${dir}`); process.exit(1); }
   const hookPath = path.join(hooksDir, 'pre-commit');
+  const marker = '# secflow pre-commit';
+  if (fs.existsSync(hookPath) && !fs.readFileSync(hookPath, 'utf8').includes(marker)) {
+    const bak = hookPath + '.secflow-bak';
+    fs.copyFileSync(hookPath, bak);
+    log(`existing non-secflow pre-commit hook backed up to ${bak}`);
+  }
   const script = `#!/bin/sh
 # secflow pre-commit — gitleaks quick scan (fast, secrets only)
 if command -v gitleaks >/dev/null 2>&1; then
@@ -376,55 +456,209 @@ exit 0
   console.log(`installed pre-commit hook: ${hookPath}`);
 }
 
-function cmdCi(args) {
-  // CI mode: env vars from GitHub Actions
+// CI mode: same engine pipeline as scan, single summary line on stdout, exit 1 on block
+async function cmdCi(args) {
   const dir = path.resolve(args.path || process.env.GITHUB_WORKSPACE || '.');
+  const skip = parseSkip(args);
   const cfg = loadConfig(dir);
   applyCliFailOn(args, cfg);
   const findings = [];
-  fs.mkdirSync(path.join(dir, '.secflow'), { recursive: true });
-  if (!args.skip || !args.skip.includes('gitleaks')) scanGitleaks(dir, cfg, findings).then(() => {
-    // npm audit + regex are sync-ish; just call them
-    scanNpmAudit(dir, cfg, findings);
-    scanRegex(dir, cfg, findings);
-    const deduped = dedupe(findings);
-    const { counts, blocked } = generateReport(deduped, cfg, dir);
-    console.log(`secflow ci: ${deduped.length} findings — ${blocked.length ? 'BLOCKED (' + blocked.join(',') + ')' : 'PASS'}`);
-    if (blocked.length) process.exitCode = 1;
-  }).catch(e => { console.error(e.message); process.exitCode = 2; });
-  // also run the sync engines even if gitleaks skipped
+  await runEngines(dir, cfg, skip, findings);
+  const deduped = dedupe(findings);
+  const { blocked } = generateReport(deduped, cfg, dir);
+  console.log(`secflow ci: ${deduped.length} findings — ${blocked.length ? 'BLOCKED (' + blocked.join(',') + ')' : 'PASS'}`);
+  if (blocked.length) process.exitCode = 1;
+}
+
+// Baseline: snapshot current findings as accepted/known-good.
+// Future scans with --baseline flag will subtract these from "new findings" alerts.
+function cmdBaseline(args) {
+  const dir = path.resolve(args.path || '.');
+  const reportPath = path.join(dir, '.secflow', 'report.json');
+  if (!fs.existsSync(reportPath)) { console.error('no report — run `secflow scan` first'); process.exit(2); }
+
+  const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  const findings = report.findings || [];
+  const timestamp = new Date().toISOString();
+
+  // Get git context for provenance
+  let commit = 'unversioned';
+  try {
+    commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+  } catch { /* ignore */ }
+
+  const baselinePath = path.join(dir, '.secflow', 'baseline.json');
+
+  // --clear: wipe baseline entirely
+  if (args.clear) {
+    if (fs.existsSync(baselinePath)) fs.rmSync(baselinePath);
+    console.log('secflow baseline cleared');
+    return;
+  }
+
+  // Build accepted findings list
+  const accepted = findings.map(f => ({
+    engine: f.engine,
+    rule: f.rule,
+    file: f.file,
+    line: f.line,
+    severity: f.severity,
+  }));
+
+  const baseline = {
+    version: report.version,
+    created: timestamp,
+    commit,
+    total_accepted: accepted.length,
+    accepted,
+  };
+
+  fs.writeFileSync(baselinePath, JSON.stringify(baseline, null, 2));
+  console.log(`secflow baseline saved: ${accepted.length} findings accepted at ${commit}`);
+  console.log(`  future scans will subtract these from "new findings" alerts`);
+}
+
+// Re-attack verification: re-run scan, compare to previous report.
+// Reports NEW regressions (findings that were absent before) separately.
+// exit 0 = no new findings, exit 1 = new regressions found
+async function cmdVerify(args) {
+  const dir = path.resolve(args.path || '.');
+  // Compare current scan against the PREVIOUS report (archived before this scan ran)
+  const prevPath = path.join(dir, '.secflow', 'report-prev.json');
+  if (!fs.existsSync(prevPath)) { console.error('no prior report — run `secflow scan` first'); process.exit(2); }
+
+  const prevReport = JSON.parse(fs.readFileSync(prevPath, 'utf8'));
+  const prevFindings = prevReport.findings || [];
+  const prevKeys = new Set(prevFindings.map(f => `${f.engine}|${f.file}|${f.line}|${f.rule}`));
+
+  // Re-run scan
+  const cfg = loadConfig(dir);
+  const skip = parseSkip(args);
+  const findings = [];
+  await runEngines(dir, cfg, skip, findings);
+  const deduped = dedupe(findings);
+
+  // Categorize: new regressions vs still-present vs fixed
+  const newRegressions = deduped.filter(f => !prevKeys.has(`${f.engine}|${f.file}|${f.line}|${f.rule}`));
+  const stillPresent = deduped.filter(f => prevKeys.has(`${f.engine}|${f.file}|${f.line}|${f.rule}`));
+  const fixed = prevFindings.filter(f => !deduped.some(d => d.engine === f.engine && d.file === f.file && d.line === f.line && d.rule === f.rule));
+
+  // Write verification report
+  const out = path.join(dir, '.secflow');
+  const verifyReport = {
+    version: VERSION,
+    generated: new Date().toISOString(),
+    previous_scan: prevReport.generated || 'unknown',
+    summary: {
+      new_regressions: newRegressions.length,
+      still_present: stillPresent.length,
+      fixed: fixed.length,
+      current_total: deduped.length,
+      previous_total: prevFindings.length,
+    },
+    new_regressions: newRegressions,
+    still_present: stillPresent,
+    fixed,
+  };
+
+  fs.writeFileSync(path.join(out, 'verify.json'), JSON.stringify(verifyReport, null, 2));
+
+  const lines = [];
+  lines.push(`# secflow verify — ${path.basename(dir)}`);
+  lines.push('');
+  lines.push(`> Generated ${new Date().toISOString()} — secflow v${VERSION}`);
+  lines.push('');
+  lines.push('## Summary');
+  lines.push('');
+  lines.push(`| Metric | Count |`);
+  lines.push(`|--------|-------|`);
+  lines.push(`| **New regressions** | **${newRegressions.length}** |`);
+  lines.push(`| Still present | ${stillPresent.length} |`);
+  lines.push(`| Fixed since last scan | ${fixed.length} |`);
+  lines.push(`| Current total | ${deduped.length} |`);
+  lines.push(`| Previous total | ${prevFindings.length} |`);
+  lines.push('');
+
+  if (newRegressions.length > 0) {
+    lines.push('## ⚠️ New Regressions');
+    lines.push('');
+    lines.push('| # | Engine | Rule | File:Line | Severity |');
+    lines.push('|---|--------|------|-----------|----------|');
+    newRegressions.forEach((f, i) => {
+      lines.push(`| ${i + 1} | ${cell(f.engine)} | \`${cell(f.rule)}\` | \`${cell(f.file)}:${f.line}\` | **${f.severity}** |`);
+    });
+    lines.push('');
+  }
+
+  if (fixed.length > 0) {
+    lines.push('## ✅ Fixed');
+    lines.push('');
+    lines.push('| # | Engine | Rule | File:Line | Severity |');
+    lines.push('|---|--------|------|-----------|----------|');
+    fixed.forEach((f, i) => {
+      lines.push(`| ${i + 1} | ${cell(f.engine)} | \`${cell(f.rule)}\` | \`${cell(f.file)}:${f.line}\` | ${f.severity} |`);
+    });
+    lines.push('');
+  }
+
+  fs.writeFileSync(path.join(out, 'verify.md'), lines.join('\n'));
+
+  if (newRegressions.length > 0) {
+    console.error(`secflow verify: ${newRegressions.length} NEW regression(s) — see .secflow/verify.md`);
+    process.exitCode = 1;
+  } else if (fixed.length > 0) {
+    console.log(`secflow verify: ✅ ${fixed.length} fixed, ${newRegressions.length} new — see .secflow/verify.md`);
+  } else {
+    console.log(`secflow verify: ✅ no regressions, ${stillPresent.length} still present — see .secflow/verify.md`);
+  }
 }
 
 // ---------- CLI ----------
 
-const args = process.argv.slice(2);
-const cmd = args[0] || 'help';
+const argv = process.argv.slice(2);
+
+const help = `secflow v${VERSION} — zero-cost security scanning for AI-driven repos
+Usage:
+  secflow scan [--path DIR] [--skip gitleaks,trivy,npm,regex] [--fail-on critical,high] [--json] [--baseline]
+  secflow report [--path DIR]
+  secflow verify [--path DIR] [--skip gitleaks,trivy,npm,regex]  # re-attack: confirm fixes landed
+  secflow baseline [--path DIR] [--clear]                        # snapshot accepted findings
+  secflow install-hook [--path DIR]
+  secflow init [--path DIR]
+  secflow ci [--path DIR]
+  secflow --version
+`;
+
+if (argv[0] === '--version' || argv[0] === '-v') { console.log(`secflow v${VERSION}`); process.exit(0); }
+if (argv[0] === '--help' || argv[0] === '-h') { console.log(help); process.exit(0); }
+
+const cmd = argv[0] || 'help';
 const opts = {};
-const rest = args.slice(1);
+const KNOWN_FLAGS = new Set(['path', 'skip', 'fail-on', 'json', 'baseline', 'clear']);
+const rest = argv.slice(1);
 for (let i = 0; i < rest.length; i++) {
   const a = rest[i];
   const m = a.match(/^--([A-Za-z0-9_-]+)(?:=(.*))?$/);
   if (m) {
+    if (!KNOWN_FLAGS.has(m[1])) log(`warn: unrecognized flag --${m[1]} — ignored`);
     if (m[2] !== undefined) opts[m[1]] = m[2];
     else if (rest[i + 1] && !rest[i + 1].startsWith('--')) opts[m[1]] = rest[++i];
     else opts[m[1]] = true;
   }
 }
 
-const help = `secflow v${VERSION} — zero-cost security scanning for AI-driven repos
-Usage:
-  secflow scan [--path DIR] [--skip gitleaks,trivy,npm,regex] [--fail-on critical,high] [--json]
-  secflow report [--path DIR]
-  secflow init [--path DIR]
-  secflow install-hook [--path DIR]
-  secflow ci [--path DIR]
-`;
+function fail(e) { log(`error: ${(e && e.message) || e}`); process.exitCode = 2; }
 
-switch (cmd) {
-  case 'scan': cmdScan(opts); break;
-  case 'report': cmdReport(opts); break;
-  case 'init': cmdInit(opts); break;
-  case 'install-hook': cmdInstallHook(opts); break;
-  case 'ci': cmdCi(opts); break;
-  default: console.log(help);
-}
+try {
+  switch (cmd) {
+      case 'scan': cmdScan(opts).catch(fail); break;
+      case 'report': cmdReport(opts); break;
+      case 'verify': cmdVerify(opts).catch(fail); break;
+      case 'baseline': cmdBaseline(opts); break;
+      case 'init': cmdInit(opts); break;
+      case 'install-hook': cmdInstallHook(opts); break;
+      case 'ci': cmdCi(opts).catch(fail); break;
+      case 'help': console.log(help); break;
+      default: console.log(help); process.exitCode = 1;
+  }
+} catch (e) { fail(e); }

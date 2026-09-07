@@ -147,7 +147,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Full SECflow report → uploads .secflow/ artifact, fails on critical/high
-      - uses: imsankz/secflow@v0.3.0   # pin to the latest release tag; see Releases
+      - uses: imsankz/secflow@v0.4.1   # pin to the latest release tag; see Releases
         with:
           fail-on: critical,high   # or: skip: trivy · path: packages/api
 ```

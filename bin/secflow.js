@@ -153,14 +153,21 @@ async function scanNpmAudit(dir, cfg, findings) {
   const vulns = data.vulnerabilities || {};
   for (const [pkg, v] of Object.entries(vulns)) {
     const sev = v.severity === 'critical' ? 'critical' : v.severity === 'high' ? 'high' : 'warning';
+    // npm audit v7+ leaves top-level `title` undefined; real advisory titles
+    // live in `via[]`. Fall back to the package name so every vuln gets a
+    // UNIQUE rule (a shared 'vulnerable dependency' rule made dedupe collapse
+    // multiple vulns into one, silently dropping high/critical findings).
+    const via = Array.isArray(v.via) ? v.via.filter(x => x && typeof x === 'object') : [];
+    const viaTitle = via.map(x => x.title).filter(Boolean).join('; ');
+    const rule = (v.title || viaTitle || pkg).slice(0, 200);
     findings.push({
       engine: 'npm-audit',
       severity: sev,
-      rule: v.title || 'vulnerable dependency',
+      rule,
       file: 'package.json',
       line: 0,
       match: `${pkg}@${v.range}`,
-      message: `${v.title || pkg}: ${v.isDirect ? 'direct' : 'transitive'} dep, ${v.severity}. Fix: ${(v.fixAvailable && v.fixAvailable.isSemVerMajor ? 'major update required' : v.fixAvailable ? 'npm audit fix' : 'no fix available')}`,
+      message: `${v.title || viaTitle || pkg}: ${v.isDirect ? 'direct' : 'transitive'} dep, ${v.severity}. Fix: ${(v.fixAvailable && v.fixAvailable.isSemVerMajor ? 'major update required' : v.fixAvailable ? 'npm audit fix' : 'no fix available')}`,
     });
   }
 }
@@ -265,7 +272,7 @@ function scanRegex(dir, cfg, findings) {
 function dedupe(findings) {
   const seen = new Set();
   return findings.filter(f => {
-    const k = `${f.engine}|${f.file}|${f.line}|${f.rule}`;
+    const k = `${f.engine}|${f.file}|${f.line}|${f.rule}|${f.match}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;

@@ -18,6 +18,27 @@ function run(args, opts = {}) {
   return spawnSync('node', [BIN, ...args], { encoding: 'utf8', ...opts });
 }
 
+// Shim an executable on PATH. Used to fake `npm audit` output deterministically
+// (no network) and to assert the engine's npm-audit parsing/dedupe behavior.
+function shim(dir, name, contents) {
+  const p = path.join(dir, name);
+  fs.writeFileSync(p, contents);
+  fs.chmodSync(p, 0o755);
+  return p;
+}
+
+const FAKE_NPM_AUDIT_MULTI = JSON.stringify({
+  metadata: { vulnerabilities: { info: 0, low: 0, moderate: 2, high: 1, critical: 0, total: 3 } },
+  vulnerabilities: {
+    '@humanfs/node': { name: '@humanfs/node', severity: 'moderate', isDirect: false, range: '<0.16.8', fixAvailable: true, title: null, via: [{ title: 'humanfs: Recursive copy follows symlinked files and copies data from outside the source tree', severity: 'moderate' }] },
+    browserslist: { name: 'browserslist', severity: 'high', isDirect: false, range: '<=4.28.6', fixAvailable: true, title: null, via: [
+      { title: 'Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM', severity: 'high' },
+      { title: 'Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)', severity: 'high' }
+    ] },
+    qs: { name: 'qs', severity: 'moderate', isDirect: false, range: '2.2.5 - 6.15.3', fixAvailable: true, title: null, via: [{ title: 'qs: Denial of Service via Attacker Controlled isBuffer', severity: 'moderate' }] }
+  }
+}, null, 2);
+
 let passed = 0, failed = 0;
 function test(name, fn) {
   try { fn(); passed++; console.log(`✓ ${name}`); }
@@ -284,6 +305,28 @@ test('supabase-key matches HS256-header anon key', () => {
   assert.strictEqual(sb.severity, 'high');
   assert.strictEqual(sb.file, 'src/client.js');
   assert.strictEqual(sb.line, 1);
+});
+
+// ---------- regression: npm audit multi-vuln dedupe collapse (P1) ----------
+test('npm audit reports EVERY vuln (no dedupe collapse), high blocks CI', () => {
+  const dir = path.join(tmp, 'npm-multi-vuln');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'demo', version: '1.0.0', dependencies: {} }));
+  const binDir = path.join(dir, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  shim(binDir, 'npm', `#!/bin/sh\ncat >&2 <<'EOF'\n[secflow] fake npm\nEOF\necho '${FAKE_NPM_AUDIT_MULTI.replace(/'/g, "'\\''")}'\nexit 1\n`);
+  const env = { ...process.env, PATH: `${binDir}:${process.env.PATH}` };
+  const r = spawnSync('node', [BIN, 'scan', '--path', dir, '--skip', 'gitleaks,trivy,regex', '--json'], { encoding: 'utf8', env });
+  const out = JSON.parse(r.stdout);
+  const npmFindings = out.findings.filter(f => f.engine === 'npm-audit');
+  // Every distinct vulnerable package must survive dedupe (bug: all shared one rule → collapsed to 1)
+  assert.strictEqual(npmFindings.length, 3, `expected 3 npm-audit findings, got ${npmFindings.length}: ${JSON.stringify(npmFindings.map(f => f.match))}`);
+  const sev = npmFindings.map(f => f.severity).sort();
+  assert.deepStrictEqual(sev, ['high', 'warning', 'warning'], `expected severities [high, warning, warning], got ${JSON.stringify(sev)}`);
+  const bl = npmFindings.find(f => f.match.startsWith('browserslist'));
+  assert.ok(bl, 'browserslist (high) must be present');
+  assert.ok(bl.rule.startsWith('Browserslist:'), `browserslist rule should carry advisory title, got: ${bl.rule}`);
+  assert.deepStrictEqual(out.blocked, ['high'], 'high-severity npm vuln must block CI');
 });
 
 // ---------- verify: re-attack comparison ----------

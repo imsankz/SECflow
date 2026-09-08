@@ -449,6 +449,58 @@ nav a:hover {
   box-shadow: 0 0 20px rgba(129, 140, 248, 0.2);
 }
 
+/* --- Sponsor Cards --- */
+.sponsor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.sponsor-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--border-radius);
+  padding: 32px 24px;
+  text-align: center;
+  text-decoration: none;
+  color: var(--text);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sponsor-card:hover {
+  border-color: var(--surface-border-hover);
+  background: var(--surface-hover);
+  transform: translateY(-2px);
+}
+
+.sponsor-card .icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+}
+
+.sponsor-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.sponsor-card p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+  flex: 1;
+}
+
+.sponsor-card .btn {
+  margin-top: auto;
+}
+
 /* --- Tables --- */
 table {
   width: 100%;
@@ -629,7 +681,8 @@ footer {
 @media (max-width: 900px) {
   .features-grid,
   .flow-cards,
-  .stats-row {
+  .stats-row,
+  .sponsor-grid {
     grid-template-columns: 1fr;
   }
   .footer-grid {

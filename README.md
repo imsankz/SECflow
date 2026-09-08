@@ -212,4 +212,9 @@ SECflow is part of a trio of zero-cost CLI tools — all MIT, all npm-published,
 
 ## ☕ Support
 
-SECflow is free forever. If it caught a leaked secret or saved you a Snyk bill, [buy me a coffee](https://ko-fi.com/chasingwhereabouts).
+SECflow is free forever. If it caught a leaked secret or saved you a Snyk bill, consider supporting the work:
+
+- ❤️ [**Sponsor @imsankz on GitHub Sponsors**](https://github.com/sponsors/imsankz) — monthly or one-time, right from your GitHub account
+- ☕ [**Buy me a coffee on Ko-fi**](https://ko-fi.com/chasingwhereabouts) — no account needed, every cup counts
+
+Sponsorships keep SECflow (and the rest of the [flow series](https://github.com/imsankz)) free: MIT licensed, no SaaS, no upsells.

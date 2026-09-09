@@ -1,0 +1,39 @@
+From 15a4e6943efeb3a996171bac76e1f0caa8fc1e71 Mon Sep 17 00:00:00 2001
+From: imsankz <116035472+imsankz@users.noreply.github.com>
+Date: Wed, 9 Sep 2026 20:00:25 +0000
+Subject: [PATCH] docs: add GitHub Sponsors to Support section + FUNDING.yml
+ (sponsor button)
+
+---
+ .github/FUNDING.yml | 3 +++
+ README.md           | 7 ++++++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+ create mode 100644 .github/FUNDING.yml
+
+diff --git a/.github/FUNDING.yml b/.github/FUNDING.yml
+new file mode 100644
+index 0000000..f395f4e
+--- /dev/null
++++ b/.github/FUNDING.yml
+@@ -0,0 +1,3 @@
++# Funding — see https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
++github: imsankz
++ko_fi: chasingwhereabouts
+diff --git a/README.md b/README.md
+index 4dc17bc..9de2097 100644
+--- a/README.md
++++ b/README.md
+@@ -337,4 +337,9 @@ MIT (see [LICENSE](./LICENSE)). Source data compiled from 11 open-source project
+ 
+ ## ☕ Support
+ 
+-BacklinkFlow is free forever. If it saves you $79 (or 40 hours), [buy me a coffee](https://ko-fi.com/chasingwhereabouts) — it funds more free tools.
++BacklinkFlow is free forever. If it saves you $79 (or 40 hours) on a Submitator-class tool, consider supporting the work:
++
++- ❤️ [**Sponsor @imsankz on GitHub Sponsors**](https://github.com/sponsors/imsankz) — monthly or one-time, right from your GitHub account
++- ☕ [**Buy me a coffee on Ko-fi**](https://ko-fi.com/chasingwhereabouts) — no account needed, every cup counts
++
++Sponsorships keep BacklinkFlow (and the rest of the [flow series](https://github.com/imsankz)) free: MIT licensed, no SaaS, no upsells.
+-- 
+2.39.5
+

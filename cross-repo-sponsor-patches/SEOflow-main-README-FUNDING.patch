@@ -1,0 +1,41 @@
+From 080872000b03df28a45af65578a69a2e476cfdf6 Mon Sep 17 00:00:00 2001
+From: imsankz <116035472+imsankz@users.noreply.github.com>
+Date: Wed, 9 Sep 2026 20:00:20 +0000
+Subject: [PATCH] docs: add GitHub Sponsors to Support links + FUNDING.yml
+ (sponsor button)
+
+---
+ .github/FUNDING.yml | 3 +++
+ README.md           | 7 ++++++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+ create mode 100644 .github/FUNDING.yml
+
+diff --git a/.github/FUNDING.yml b/.github/FUNDING.yml
+new file mode 100644
+index 0000000..f395f4e
+--- /dev/null
++++ b/.github/FUNDING.yml
+@@ -0,0 +1,3 @@
++# Funding — see https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
++github: imsankz
++ko_fi: chasingwhereabouts
+diff --git a/README.md b/README.md
+index d11bb67..f8cf855 100644
+--- a/README.md
++++ b/README.md
+@@ -479,4 +479,9 @@ If SeoFlow helps you ship better SEO content, ⭐ the repo and share it:
+ 
+ > **SeoFlow** — the AI SEO pipeline that lives in your repo, not a SaaS dashboard. `npx seoflow init` → audit → learn → grow. Works with any stack. https://github.com/imsankz/seoflow
+ 
+-Built by [@imsankz](https://github.com/imsankz). SeoFlow is free forever — if it saves you a Surfer/Clearscope bill, [buy me a coffee](https://ko-fi.com/chasingwhereabouts) ☕.
+\ No newline at end of file
++Built by [@imsankz](https://github.com/imsankz). SeoFlow is free forever — if it saves you a Surfer/Clearscope bill, consider supporting the work:
++
++- ❤️ [**Sponsor @imsankz on GitHub Sponsors**](https://github.com/sponsors/imsankz) — monthly or one-time, right from your GitHub account
++- ☕ [**Buy me a coffee on Ko-fi**](https://ko-fi.com/chasingwhereabouts) — no account needed, every cup counts
++
++Sponsorships keep SeoFlow (and the rest of the [flow series](https://github.com/imsankz)) free: MIT licensed, no SaaS, no upsells.
+\ No newline at end of file
+-- 
+2.39.5
+

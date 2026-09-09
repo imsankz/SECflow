@@ -1,0 +1,132 @@
+From ba57db96180f95d4447a53897cf287f4a1b43b23 Mon Sep 17 00:00:00 2001
+From: imsankz <116035472+imsankz@users.noreply.github.com>
+Date: Wed, 9 Sep 2026 20:00:14 +0000
+Subject: [PATCH] feat: add GitHub Sponsors + Ko-fi sponsor section and footer
+ links
+
+---
+ assets/flow-design.css | 67 ++++++++++++++++++++++++++++++++++++++++++
+ index.html             | 25 +++++++++++++++-
+ 2 files changed, 91 insertions(+), 1 deletion(-)
+
+diff --git a/assets/flow-design.css b/assets/flow-design.css
+index 017cf79..ae55f2f 100644
+--- a/assets/flow-design.css
++++ b/assets/flow-design.css
+@@ -793,3 +793,70 @@ footer { border-top: 1px solid var(--border); padding: 56px 0 32px; }
+ @media (max-width: 480px) {
+   .hero .cta-row .btn { width: 100%; justify-content: center; }
+ }
++
++/* --- Sponsor --- */
++.sponsor-grid {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 16px;
++  max-width: var(--container-narrow);
++  margin: 0 auto;
++}
++
++.sponsor-card {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  background: var(--surface);
++  border: 1px solid var(--border);
++  border-radius: var(--radius-lg);
++  padding: 32px 24px;
++  text-align: center;
++  text-decoration: none;
++  color: var(--ink);
++  transition: transform 0.2s, border-color 0.2s, background 0.2s;
++}
++
++.sponsor-card:hover {
++  transform: translateY(-3px);
++  border-color: var(--green-border);
++  background: var(--surface-2);
++}
++
++.sponsor-card .icon {
++  font-size: 36px;
++  margin-bottom: 14px;
++}
++
++.sponsor-card h3 {
++  font-family: var(--font-display);
++  font-size: 19px;
++  font-weight: 700;
++  margin-bottom: 8px;
++}
++
++.sponsor-card p {
++  font-size: 14px;
++  line-height: 1.6;
++  color: var(--ink-dim);
++  margin-bottom: 18px;
++  flex: 1;
++}
++
++.sponsor-card .btn {
++  margin-top: auto;
++}
++
++.footer-bottom a {
++  color: var(--ink-faint);
++  text-decoration: none;
++}
++
++.footer-bottom a:hover {
++  color: var(--ink);
++  text-decoration: underline;
++}
++
++@media (max-width: 720px) {
++  .sponsor-grid { grid-template-columns: 1fr; }
++}
+diff --git a/index.html b/index.html
+index 9cda6ff..d3aaa64 100644
+--- a/index.html
++++ b/index.html
+@@ -353,6 +353,29 @@
+   </div>
+ </section>
+ 
++<section id="sponsor">
++  <div class="container">
++    <div class="section-head">
++      <h2 class="section-title">Keep SeoFlow free</h2>
++      <p class="section-subtitle">SeoFlow is MIT-licensed and lives in your repo — no SaaS rent, no upsells. If it saves you a Surfer or Clearscope bill, consider supporting the work.</p>
++    </div>
++    <div class="sponsor-grid">
++      <a href="https://github.com/sponsors/imsankz" target="_blank" rel="noopener" class="sponsor-card">
++        <div class="icon">❤️</div>
++        <h3>GitHub Sponsors</h3>
++        <p>Monthly or one-time support for @imsankz, right from your GitHub account. Funds SeoFlow and the whole flow series.</p>
++        <span class="btn btn-primary btn-small">Sponsor on GitHub →</span>
++      </a>
++      <a href="https://ko-fi.com/chasingwhereabouts" target="_blank" rel="noopener" class="sponsor-card">
++        <div class="icon">☕</div>
++        <h3>Ko-fi</h3>
++        <p>Prefer a one-off? Buy the maintainer a coffee — no account needed, every cup counts.</p>
++        <span class="btn btn-secondary btn-small">Buy me a coffee →</span>
++      </a>
++    </div>
++  </div>
++</section>
++
+ </main>
+ 
+ <footer>
+@@ -387,7 +410,7 @@
+       </div>
+     </div>
+     <div class="footer-bottom">
+-      <span>SeoFlow · MIT license</span>
++      <span>SeoFlow · MIT license · <a href="https://github.com/sponsors/imsankz">❤️ GitHub Sponsors</a> · <a href="https://ko-fi.com/chasingwhereabouts">☕ Ko-fi</a></span>
+       <div id="kofiwidget2"></div>
+     </div>
+   </div>
+-- 
+2.39.5
+
